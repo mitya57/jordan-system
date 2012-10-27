@@ -1,0 +1,5 @@
+*.out
+*.gch
+*.o
+matrix
+matrix_tests

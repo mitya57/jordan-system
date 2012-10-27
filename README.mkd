@@ -1,0 +1,41 @@
+This program is able to solve linear systems using the Jordan method.
+
+## Usage
+
+### Reading matrix from the file
+
+    matrix MatrixSize BlockSize FileName
+
+will read the matrix from file `FileName`, which should have the following format:
+
+    N
+    Element00 Element01 ... Element0N   RightColumn0
+    Element10 Element11 ... Element1N   RightColumn1
+    . . . . .
+    ElementN0 ElementN1 ... ElementNN   RightColumnN
+
+### Automatically generating the matrix
+
+    matrix MatrixSize BlockSize
+
+will automatically generate the matrix using a formula given in `function.hh` file.
+
+### Compiling
+
+To reach the maximum performance, we recommend using the [Profile-guided optimization][1].
+First you need to generate the profile. To do that, run:
+
+    g++ -O3 -fprofile-generate matrix.cc -o matrix
+
+Then run the `matrix` executable as described below and wait for the profile to be generated.
+After that is done, run:
+
+    g++ -O3 -fprofile-use matrix.cc -o matrix
+
+Now your program will be optimized based on its profile.
+
+[1]: https://en.wikipedia.org/wiki/Profile-guided_optimization
+
+## Running the tests
+
+To ensure that the functions work well, a test program `matrix_tests.cc` is included.
