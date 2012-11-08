@@ -13,7 +13,9 @@
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <pthread.h>
 #include <sys/resource.h>
+
 #include "block.hh"
 #include "matrix.hh"
 #include "matrix_solve.hh"
@@ -60,11 +62,12 @@ double get_residual(int size, double *oldc, double *newc) {
 
 int main(int argc, char **argv) {
 	Matrix *matrix = new Matrix;
-	int size, blocksize, i, j;
+	int size, blocksize, threads, i, j;
 	
-	if (argc >= 2) {
+	if (argc >= 3) {
 		size = atoi(argv[1]);
 		blocksize = atoi(argv[2]);
+		threads = atoi(argv[3]);
 	} else {
 		std::cout << "Enter size and blocksize: ";
 		std::cin >> size;
@@ -75,7 +78,7 @@ int main(int argc, char **argv) {
 	double *origmatrix = new double[size*size];
 	double *origrightcol = new double[size];
 	double *testrightcol = new double[size];
-	if (argc < 4) {
+	if (argc < 5) {
 		for (i = 0; i < size; ++i)
 			for (j = 0; j < size; ++j)
 				matrix_set_element(matrix, i, j, get_matrix_element(i, j));
@@ -86,8 +89,8 @@ int main(int argc, char **argv) {
 		}
 	} else { 
 		std::fstream matrixfile;
-		if (argc >= 3)
-			matrixfile.open(argv[3]);
+		if (argc >= 4)
+			matrixfile.open(argv[4]);
 		else
 			matrixfile.open("matrix.txt");
 
@@ -112,7 +115,7 @@ int main(int argc, char **argv) {
 	rusage resource_usage;
 	getrusage(RUSAGE_SELF, &resource_usage);
 	print_result(matrix, rightcol, 10);
-	if (argc < 4)
+	if (argc < 5)
 		std::cout << "Norm of diff vector is "
 		<< get_diff_norm(matrix, rightcol) << std::endl;
 	matrix_apply_to_vector(matrix, origmatrix, rightcol, testrightcol);

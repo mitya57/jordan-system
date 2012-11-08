@@ -4,6 +4,69 @@
  * This file contains the main solution procedure. *
  ***************************************************/
 
+#ifndef NO_INCLUDE
+#include <iostream>
+#include <pthread.h>
+#include "matrix.hh"
+#include "block.hh"
+#endif
+
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+struct Arguments {
+	Matrix *matrix;
+	int i;
+	int s;
+	int threads;
+	int *processedthreads;
+	double *minnorm;
+	double *mini;
+	double *minj;
+};
+
+void *thread_function(void *argp) {
+	Arguments *args = (Arguments *)argp;
+	Matrix *matrix = args->matrix;
+	
+	double lminnorm = 1e20, norm;
+	int lmini = args->s;
+	int lminj = lmini;
+	int l, t;
+	
+	double *lbuf = new double[matrix->blocksize * matrix->blocksize];
+	double *rmatrix = new double[matrix->blocksize * matrix->blocksize];
+	
+	// On every line we want to process blocks:
+	// t = s + i + k*threads    for each k
+	
+	for (l = args->s; l < matrix->size / matrix->blocksize; ++l)
+		for (t = args->s + args->i; t < matrix->size / matrix->blocksize; t += args->threads) {
+			// Process block (l, t)
+			if (block_get_reverse(matrix->blocksize,
+				matrix_get_pos_block(matrix, l, t),
+				rmatrix,
+				lbuf)
+			) {
+				norm = block_get_norm(matrix->blocksize, rmatrix);
+				if (norm < lminnorm) {
+					lminnorm = norm;
+					lmini = l;
+					lminj = t;
+				}
+			}
+		}
+	
+	pthread_mutex_lock(&mutex);
+	if (lminnorm < *(args->minnorm)) {
+		*(args->minnorm) = lminnorm;
+		*(args->mini) = lmini;
+		*(args->minj) = lminj;
+	}
+	++(*(args->processedthreads));
+	pthread_mutex_unlock(&mutex);
+	return NULL;
+}
+
 void print_matrix(Matrix *matrix, double *rightcol) {
 	int i, j;
 	double el;
