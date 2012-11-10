@@ -5,5 +5,5 @@
  ******************************************************/
 
 double get_matrix_element(int i, int j) {
-	return 1. / (1 + i + j);
+	return fabs(i-j);
 }
