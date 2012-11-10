@@ -35,6 +35,7 @@ void print_result(Matrix *matrix, double *rightcol, int limit) {
 
 void matrix_apply_to_vector(Matrix *matrix, double *origmatrix,
 double *vector, double *newvector) {
+	// FIXME: this should be using blocks
 	int i, j;
 	for (i = 0; i < matrix->size; ++i) {
 		newvector[i] = 0;
@@ -64,14 +65,14 @@ int main(int argc, char **argv) {
 	Matrix *matrix = new Matrix;
 	int size, blocksize, threads, i, j;
 	
-	if (argc >= 3) {
+	if (argc >= 4) {
 		size = atoi(argv[1]);
 		blocksize = atoi(argv[2]);
 		threads = atoi(argv[3]);
 	} else {
-		std::cout << "Enter size and blocksize: ";
-		std::cin >> size;
-		std::cin >> blocksize;
+		std::cerr << "Usage: matrix SIZE BLOCKSIZE THREADS [FILENAME]"
+		<< std::endl;
+		exit(0);
 	}
 	matrix_new(matrix, size, blocksize);
 	double *rightcol = new double[size];
@@ -111,7 +112,7 @@ int main(int argc, char **argv) {
 		for (j = 0; j < size; ++j)
 			origmatrix[i*size+j] = matrix_get_element(matrix, i, j);
 	print_matrix(matrix, rightcol);
-	matrix_solve(size, blocksize, matrix, rightcol);
+	matrix_solve(size, blocksize, threads, matrix, rightcol);
 	rusage resource_usage;
 	getrusage(RUSAGE_SELF, &resource_usage);
 	print_result(matrix, rightcol, 10);

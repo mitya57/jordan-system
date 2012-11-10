@@ -11,24 +11,29 @@
 #include "block.hh"
 #endif
 
+#include <cassert>
+
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct Arguments {
 	Matrix *matrix;
 	int i;
+	int ti;
 	int s;
 	int threads;
 	int *processedthreads;
 	double *minnorm;
-	double *mini;
-	double *minj;
+	double *rightcol;
+	double *tmp;
+	int *mini;
+	int *minj;
 };
 
-void *thread_function(void *argp) {
+void *tf1(void *argp) {
 	Arguments *args = (Arguments *)argp;
 	Matrix *matrix = args->matrix;
 	
-	double lminnorm = 1e20, norm;
+	double lminnorm = -1, norm;
 	int lmini = args->s;
 	int lminj = lmini;
 	int l, t;
@@ -40,7 +45,7 @@ void *thread_function(void *argp) {
 	// t = s + i + k*threads    for each k
 	
 	for (l = args->s; l < matrix->size / matrix->blocksize; ++l)
-		for (t = args->s + args->i; t < matrix->size / matrix->blocksize; t += args->threads) {
+		for (t = args->s + args->ti; t < matrix->size / matrix->blocksize; t += args->threads) {
 			// Process block (l, t)
 			if (block_get_reverse(matrix->blocksize,
 				matrix_get_pos_block(matrix, l, t),
@@ -48,7 +53,7 @@ void *thread_function(void *argp) {
 				lbuf)
 			) {
 				norm = block_get_norm(matrix->blocksize, rmatrix);
-				if (norm < lminnorm) {
+				if (lminnorm < 0 || norm < lminnorm) {
 					lminnorm = norm;
 					lmini = l;
 					lminj = t;
@@ -57,13 +62,47 @@ void *thread_function(void *argp) {
 		}
 	
 	pthread_mutex_lock(&mutex);
-	if (lminnorm < *(args->minnorm)) {
+	if (!*(args->processedthreads) || lminnorm < *(args->minnorm)) {
 		*(args->minnorm) = lminnorm;
 		*(args->mini) = lmini;
 		*(args->minj) = lminj;
 	}
 	++(*(args->processedthreads));
 	pthread_mutex_unlock(&mutex);
+	return NULL;
+}
+
+void *tf2(void *argp) {
+	Arguments *args = (Arguments *)argp;
+	int i = args->i, j, s = args->s;
+	Matrix *matrix = args->matrix;
+	
+	for (j = s + 1 + args->ti; j < matrix->numberOfBlockColumns; j += args->threads) {
+		block_left_multiply(
+			matrix_get_pos_height(matrix, i),
+			matrix_get_pos_width(matrix, s),
+			matrix_get_pos_height(matrix, j),
+			matrix_get_pos_block(matrix, s, j),
+			matrix_get_pos_block(matrix, i, s),
+			args->tmp
+		);
+		block_subtract(
+			matrix_get_pos_size(matrix, i, j),
+			matrix_get_pos_block(matrix, i, j),
+			args->tmp
+		);
+	}
+	block_apply_to_vector(
+		matrix->blocksize,
+		matrix_get_pos_width(matrix, i),
+		matrix_get_pos_block(matrix, i, s),
+		&(args->rightcol[s * matrix->blocksize]),
+		args->tmp
+	);
+	block_subtract(matrix_get_pos_height(matrix, i),
+		&(args->rightcol[i * matrix->blocksize]),
+		args->tmp
+	);
 	return NULL;
 }
 
@@ -83,40 +122,55 @@ void print_matrix(Matrix *matrix, double *rightcol) {
 	std::cout << "-----------------------------" << std::endl;
 }
 
-void matrix_solve(int size, int blocksize, Matrix *matrix, double *rightcol) {
-	int mini, minj, i, j, s, index;
+void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *rightcol) {
+	int mini, minj, i, j, s, t, index, processedthreads;
 	double *tempmatrix = new double[blocksize*blocksize];
 	double *buf = new double[blocksize*blocksize];
-	double *block, *tempvector = new double[blocksize];
-	double minnorm, norm;
+	double *block;
+	double minnorm;
+	
+	pthread_t *thr = new pthread_t[threads];
+	Arguments *args = new Arguments[threads];
 	
 	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
-		minnorm = 1e20;
-		mini = s;
-		minj = s;
+#ifdef DEBUG
+		std::cout << "s: " << s << std::endl;
+		print_matrix(matrix, rightcol);
+#endif
 		
-		// TODO: calculate only norms of non-zero blocks
-		for (i = s; i < size/blocksize; ++i)
-			for (j = s; j < size/blocksize; ++j) {
-				if (block_get_reverse(blocksize,
-					matrix_get_pos_block(matrix, i, j),
-					tempmatrix,
-					buf)
-				) {
-				    norm = block_get_norm(blocksize, tempmatrix);
-				    if (norm < minnorm) {
-				    	minnorm = norm;
-				    	mini = i;
-				    	minj = j;
-				    }
-				}
-			}
+		processedthreads = 0;
+		for (t = 0; t < threads; ++t) {
+			args[t].matrix = matrix;
+			args[t].ti = t;
+			args[t].s = s;
+			args[t].threads = threads;
+			args[t].processedthreads = &processedthreads;
+			args[t].minnorm = &minnorm;
+			args[t].mini = &mini;
+			args[t].minj = &minj;
+			
+			int res = pthread_create(
+				&(thr[t]), // Thread identifier
+				NULL,      // Thread attributes: using defaults
+				&tf1,      // Thread start function
+				&(args[t]) // Parameter to be passed to thread function
+			);
+			if (res) std::cerr << "Cannot create thread!" << std::endl;
+		}
+		
+		for (t = 0; t < threads; ++t)
+			pthread_join(thr[t], NULL);
+		
+		assert (processedthreads == threads);
+#ifdef DEBUG
+		std::cout << "minblock: (" << mini << ", " << minj << ")" << std::endl;
+#endif
 		matrix_swap_block_columns(matrix, minj, s);
 		matrix_swap_block_rows   (matrix, mini, s);
 		if (s != mini)
-		for (j = 0; j < blocksize; ++j)
-			std::swap(rightcol[blocksize*s+j],
-				rightcol[blocksize*mini+j]);
+			for (j = 0; j < blocksize; ++j)
+				std::swap(rightcol[blocksize*s+j],
+					rightcol[blocksize*mini+j]);
 		block_get_reverse(matrix_get_pos_height(matrix, s),
 			matrix_get_pos_block(matrix, s, s),
 			tempmatrix,
@@ -140,32 +194,24 @@ void matrix_solve(int size, int blocksize, Matrix *matrix, double *rightcol) {
 				matrix_get_pos_block(matrix, s, s)
 				[i*matrix_get_pos_height(matrix, s)+j] = (i == j);
 		for (i = s+1; i < matrix->numberOfBlockColumns; ++i) {
-			for (j = s+1; j < matrix->numberOfBlockColumns; ++j) {
-				block_left_multiply(
-					matrix_get_pos_height(matrix, i),
-					matrix_get_pos_width(matrix, s), /* blocksize */
-					matrix_get_pos_height(matrix, j),
-					matrix_get_pos_block(matrix, s, j),
-					matrix_get_pos_block(matrix, i, s),
-					tempmatrix
+			for (t = 0; t < threads; ++t) {
+				//args[t].matrix = matrix;
+				//args[t].ti = t;
+				//args[t].s = s;
+				//args[t].threads = threads;
+				args[t].i = i;
+				args[t].rightcol = rightcol;
+				args[t].tmp = tempmatrix;
+				int res = pthread_create(
+					&(thr[t]), // Thread identifier
+					NULL,      // Thread attributes: using defaults
+					&tf1,      // Thread start function
+					&(args[t]) // Parameter to be passed to thread function
 				);
-				block_subtract(
-					matrix_get_pos_size(matrix, i, j),
-					matrix_get_pos_block(matrix, i, j),
-					tempmatrix
-				);
+				if (res) std::cerr << "Cannot create thread!" << std::endl;
 			}
-			block_apply_to_vector(
-				blocksize,
-				matrix_get_pos_width(matrix, i),
-				matrix_get_pos_block(matrix, i, s),
-				&(rightcol[s*blocksize]),
-				tempvector
-			);
-			block_subtract(matrix_get_pos_height(matrix, i),
-				&(rightcol[i*blocksize]),
-				tempvector
-			);
+			for (t = 0; t < threads; ++t)
+				pthread_join(thr[t], NULL);
 		}
 		for (i = s+1; i < matrix->numberOfBlockColumns; ++i) {
 			block = matrix_get_pos_block(matrix, i, s);
@@ -177,7 +223,9 @@ void matrix_solve(int size, int blocksize, Matrix *matrix, double *rightcol) {
 	for (i = size-1; i >= 0; --i)
 		for (j = i+1; j < size; ++j)
 			rightcol[i] -= matrix_get_element(matrix, i, j)*rightcol[j];
+	pthread_mutex_destroy(&mutex);
 	delete[] tempmatrix;
 	delete[] buf;
-	delete[] tempvector;
+	delete[] thr;
+	delete[] args;
 }
