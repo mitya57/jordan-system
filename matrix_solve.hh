@@ -40,11 +40,8 @@ void *tf1(void *argp) {
 	double *lbuf = new double[matrix->blocksize * matrix->blocksize];
 	double *rmatrix = new double[matrix->blocksize * matrix->blocksize];
 	
-	// On every line we want to process blocks:
-	// t = s + i + k*threads    for each k
-	
-	for (l = args->s; l < matrix->size / matrix->blocksize; ++l)
-		for (t = args->s + args->ti; t < matrix->size / matrix->blocksize; t += args->threads) {
+	for (l = args->s + args->ti; l < matrix->size / matrix->blocksize; l += args->threads) {
+		for (t = args->s; t < matrix->size / matrix->blocksize; ++t)
 			// Process block (l, t)
 			if (block_get_reverse(matrix->blocksize,
 				matrix_get_pos_block(matrix, l, t),
