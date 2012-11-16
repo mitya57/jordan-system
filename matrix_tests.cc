@@ -73,6 +73,7 @@ void test_block_functions() {
 	assert(EQUAL(block2[6], 0.25));
 	assert(EQUAL(block2[7], 0.5));
 	assert(EQUAL(block2[8], 0.75));
+	delete[] buf;
 	delete[] block1;
 	delete[] block2;
 }

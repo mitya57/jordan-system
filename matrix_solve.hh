@@ -74,7 +74,7 @@ void *tf2(void *argp) {
 	Arguments *args = (Arguments *)argp;
 	int i = args->i, j, s = args->s;
 	Matrix *matrix = args->matrix;
-	double *tmp = new double [matrix->blocksize*matrix->blocksize];
+	double *tmp = new double [matrix->blocksize * matrix->blocksize];
 	for (j = s + 1 + args->ti; j < matrix->numberOfBlockColumns; j += args->threads) {
 #ifdef DEBUG
 		pthread_mutex_lock(&mutex);
@@ -204,9 +204,9 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 		for (i = s+1; i < matrix->numberOfBlockColumns; ++i) {
 			processedthreads = 0;
 			for (t = 0; t < numberofthreads; ++t) {
-				//args[t].matrix = matrix;
-				//args[t].ti = t;
-				//args[t].s = s;
+				args[t].matrix = matrix;
+				args[t].ti = t;
+				args[t].s = s;
 				args[t].threads = numberofthreads;
 				args[t].processedthreads = &processedthreads;
 				args[t].ti = t;
