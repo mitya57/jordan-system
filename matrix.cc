@@ -33,17 +33,6 @@ void print_result(Matrix *matrix, double *rightcol, int limit) {
 		<< PRETTY(get_result(matrix, rightcol, i)) << std::endl;
 }
 
-void matrix_apply_to_vector(Matrix *matrix, double *origmatrix,
-double *vector, double *newvector) {
-	// FIXME: this should be using blocks
-	int i, j;
-	for (i = 0; i < matrix->size; ++i) {
-		newvector[i] = 0;
-		for (j = 0; j < matrix->size; ++j)
-			newvector[i] += origmatrix[i*(matrix->size)+j] * get_result(matrix, vector, j);
-	}
-}
-
 double get_diff_norm(Matrix *matrix, double *rightcol) {
 	double sum = 0;
 	for (int i = 0; i < matrix->size; ++i)
@@ -62,7 +51,7 @@ double get_residual(int size, double *oldc, double *newc) {
 }
 
 int main(int argc, char **argv) {
-	Matrix *matrix = new Matrix;
+	Matrix *matrix = new Matrix, *origmatrix = new Matrix;
 	int size, blocksize, threads, i, j;
 	
 	if (argc >= 4) {
@@ -75,8 +64,8 @@ int main(int argc, char **argv) {
 		exit(0);
 	}
 	matrix_new(matrix, size, blocksize);
+	matrix_new(origmatrix, size, blocksize);
 	double *rightcol = new double[size];
-	double *origmatrix = new double[size*size];
 	double *origrightcol = new double[size];
 	double *testrightcol = new double[size];
 	if (argc < 5) {
@@ -110,7 +99,7 @@ int main(int argc, char **argv) {
 		origrightcol[i] = rightcol[i];
 	for (i = 0; i < size; ++i)
 		for (j = 0; j < size; ++j)
-			origmatrix[i*size+j] = matrix_get_element(matrix, i, j);
+			matrix_set_element(origmatrix, i, j, matrix_get_element(matrix, i, j));
 	print_matrix(matrix, rightcol);
 	matrix_solve(size, blocksize, threads, matrix, rightcol);
 	rusage resource_usage;
@@ -119,18 +108,19 @@ int main(int argc, char **argv) {
 	if (argc < 5)
 		std::cout << "Norm of diff vector is "
 		<< get_diff_norm(matrix, rightcol) << std::endl;
-	matrix_apply_to_vector(matrix, origmatrix, rightcol, testrightcol);
+	matrix_apply_to_vector(origmatrix, rightcol, testrightcol);
 	std::cout << "Residual is " <<
 	get_residual(size, origrightcol, testrightcol) << std::endl;
-	delete[] origmatrix;
-	delete[] origrightcol;
-	delete[] testrightcol;
 	std::cout << "=============== TIME: "
 	<< resource_usage.ru_utime.tv_sec << " seconds, "
 	<< resource_usage.ru_utime.tv_usec / 1000
 	<< " milliseconds ===============" << std::endl;
-	matrix_free(matrix);
 	delete[] rightcol;
+	delete[] origrightcol;
+	delete[] testrightcol;
+	matrix_free(matrix);
+	matrix_free(origmatrix);
 	delete matrix;
+	delete origmatrix;
 	return 0;
 }

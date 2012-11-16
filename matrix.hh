@@ -6,6 +6,7 @@
 
 #ifndef NO_INCLUDE
 #include <algorithm>
+#include "block.hh"
 #endif
 
 // TODO: reduce size of numberOfBlock* arrays (?)
@@ -130,4 +131,25 @@ void matrix_swap_block_rows(Matrix *matrix, int x1, int x2) {
 		++start1;
 		++start2;
 	}
+}
+
+void matrix_apply_to_vector(Matrix *matrix, double *vector, double *newvector) {
+	double *tmp = new double[matrix->blocksize];
+	int br, bc, i;
+	for (br = 0; br < matrix->numberOfBlockRows; ++br) {
+		for (i = 0; i < matrix_get_pos_height(matrix, br); ++i)
+			newvector[br * matrix->blocksize + i] = 0;
+		for (bc = 0; bc < matrix->numberOfBlockColumns; ++bc) {
+			block_apply_to_vector(
+				matrix_get_pos_width(matrix, bc),
+				matrix_get_pos_height(matrix, br),
+				matrix_get_pos_block(matrix, br, bc),
+				&(vector[bc * matrix->blocksize]),
+				tmp
+			);
+			for (i = 0; i < matrix_get_pos_height(matrix, br); ++i)
+				newvector[br * matrix->blocksize + i] += tmp[i];
+		}
+	}
+	delete[] tmp;
 }

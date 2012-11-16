@@ -6,11 +6,13 @@
 
 #define EPS 1e-8
 #define EQUAL(m, n) fabs(m-(n)) < EPS
+#define NO_INCLUDE
 
-#include <iostream>
+#include <algorithm>
 #include <cassert>
-#include "matrix.hh"
+#include <cmath>
 #include "block.hh"
+#include "matrix.hh"
 
 void assert_equal(double i1, double i2) {
 	assert (fabs(i1 - i2) < EPS);
@@ -102,8 +104,31 @@ void test_matrix_functions() {
 	delete matrix;
 }
 
+void test_matrix_apply_to_vector() {
+	Matrix *matrix = new Matrix;
+	double *vector = new double[3];
+	double *newvector = new double[3];
+	int i, j;
+	matrix_new(matrix, 3, 2);
+	for (i = 0; i < 3; ++i)
+		for (j = 0; j < 3; ++j)
+			matrix_set_element(matrix, i, j, i*3+j+1);
+	vector[0] = 3;
+	vector[1] = 2;
+	vector[2] = 1;
+	matrix_apply_to_vector(matrix, vector, newvector);
+	assert(EQUAL(newvector[0], 10));
+	assert(EQUAL(newvector[1], 28));
+	assert(EQUAL(newvector[2], 46));
+	matrix_free(matrix);
+	delete matrix;
+	delete[] vector;
+	delete[] newvector;
+}
+
 int main(void) {
 	test_matrix_functions();
+	test_matrix_apply_to_vector();
 	test_block_functions();
 	return 0;
 }
