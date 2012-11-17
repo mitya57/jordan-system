@@ -35,24 +35,24 @@ void *tf1(void *argp) {
 	double lminnorm = -1, norm;
 	int lmini = args->s;
 	int lminj = lmini;
-	int l, t;
+	int l, j;
 	
-	double *lbuf = new double[matrix->blocksize * matrix->blocksize];
+	double *tmp = new double[matrix->blocksize * matrix->blocksize];
 	double *rmatrix = new double[matrix->blocksize * matrix->blocksize];
 	
 	for (l = args->s + args->ti; l < matrix->size / matrix->blocksize; l += args->threads) {
-		for (t = args->s; t < matrix->size / matrix->blocksize; ++t)
-			// Process block (l, t)
+		for (j = args->s; j < matrix->size / matrix->blocksize; ++j)
+			// Process block (l, j)
 			if (block_get_reverse(matrix->blocksize,
-				matrix_get_pos_block(matrix, l, t),
+				matrix_get_pos_block(matrix, l, j),
 				rmatrix,
-				lbuf)
+				tmp)
 			) {
 				norm = block_get_norm(matrix->blocksize, rmatrix);
 				if (lminnorm < 0 || norm < lminnorm) {
 					lminnorm = norm;
 					lmini = l;
-					lminj = t;
+					lminj = j;
 				}
 			}
 		}
@@ -65,7 +65,7 @@ void *tf1(void *argp) {
 	}
 	++(*(args->processedthreads));
 	pthread_mutex_unlock(&mutex);
-	delete[] lbuf;
+	delete[] tmp;
 	delete[] rmatrix;
 	return NULL;
 }
