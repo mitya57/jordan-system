@@ -119,11 +119,10 @@ void print_matrix(Matrix *matrix, double *rightcol) {
 }
 
 void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *rightcol) {
-	int mini, minj, i, j, s, t, index, processedthreads, retval;
+	int mini, minj, i, j, s, t, index, processedthreads, numberofthreads;
 	double *tempmatrix = new double[blocksize*blocksize];
 	double *buf = new double[blocksize*blocksize];
 	double *block;
-	double numberofthreads;
 	double minnorm;
 	
 	pthread_t *thr = new pthread_t[threads];
