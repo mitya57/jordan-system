@@ -21,25 +21,19 @@
 #include "matrix_solve.hh"
 #include "function.hh"
 
-double get_result(Matrix *matrix, double *rightcol, int i) {
-	int j = 0;
-	while (matrix->blockcolumnind[j] != i/matrix->blocksize) ++j;
-	return rightcol[j + i % matrix->blocksize];
-}
-
 void print_result(Matrix *matrix, double *rightcol, int limit) {
 	for (int i = 0; i < (matrix->size > limit ? limit : matrix->size); ++i)
 		std::cout << "variable " << i+1 << " is: "
-		<< PRETTY(get_result(matrix, rightcol, i)) << std::endl;
+		<< PRETTY(rightcol[i]) << std::endl;
 }
 
 double get_diff_norm(Matrix *matrix, double *rightcol) {
 	double sum = 0;
 	for (int i = 0; i < matrix->size; ++i)
 		if (i & 1)
-			sum += pow(get_result(matrix, rightcol, i), 2);
+			sum += pow(rightcol[i], 2);
 		else
-			sum += pow(get_result(matrix, rightcol, i) - 1, 2);
+			sum += pow(rightcol[i] - 1, 2);
 	return sqrt(sum);
 }
 
@@ -66,6 +60,7 @@ int main(int argc, char **argv) {
 	matrix_new(matrix, size, blocksize);
 	matrix_new(origmatrix, size, blocksize);
 	double *rightcol = new double[size];
+	double *realrightcol = new double[size];
 	double *origrightcol = new double[size];
 	double *testrightcol = new double[size];
 	if (argc < 5) {
@@ -104,11 +99,16 @@ int main(int argc, char **argv) {
 	matrix_solve(size, blocksize, threads, matrix, rightcol);
 	rusage resource_usage;
 	getrusage(RUSAGE_SELF, &resource_usage);
-	print_result(matrix, rightcol, 10);
+	for (i = 0; i < size; ++i) {
+		j = 0;
+		while (matrix->blockcolumnind[j] != i/matrix->blocksize) ++j;
+		realrightcol[i] = rightcol[j + i % matrix->blocksize];
+	}
+	print_result(matrix, realrightcol, 10);
 	if (argc < 5)
 		std::cout << "Norm of diff vector is "
-		<< get_diff_norm(matrix, rightcol) << std::endl;
-	matrix_apply_to_vector(origmatrix, rightcol, testrightcol);
+		<< get_diff_norm(matrix, realrightcol) << std::endl;
+	matrix_apply_to_vector(origmatrix, realrightcol, testrightcol);
 	std::cout << "Residual is " <<
 	get_residual(size, origrightcol, testrightcol) << std::endl;
 	std::cout << "=============== TIME: "
@@ -116,6 +116,7 @@ int main(int argc, char **argv) {
 	<< resource_usage.ru_utime.tv_usec / 1000
 	<< " milliseconds ===============" << std::endl;
 	delete[] rightcol;
+	delete[] realrightcol;
 	delete[] origrightcol;
 	delete[] testrightcol;
 	matrix_free(matrix);
