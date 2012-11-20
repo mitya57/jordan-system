@@ -164,10 +164,6 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 	}
 	
 	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
-#ifdef DEBUG
-		std::cout << "s: " << s << std::endl;
-		print_matrix(matrix, rightcol);
-#endif
 		processedthreads = 0;
 		pthread_mutex_lock(&mutex);
 		pthread_cond_broadcast(&condvar_totf);
