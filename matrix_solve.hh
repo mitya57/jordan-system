@@ -14,12 +14,14 @@
 #include <cassert>
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t condvar_tomf = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t condvar_totf = PTHREAD_COND_INITIALIZER;
+
+static bool threads = false;
 
 struct Arguments {
 	Matrix *matrix;
-	int i;
 	int ti;
-	int s;
 	int threads;
 	int *processedthreads;
 	double *minnorm;
@@ -28,77 +30,91 @@ struct Arguments {
 	int *minj;
 };
 
-void *tf1(void *argp) {
+void *tf(void *argp) {
 	Arguments *args = (Arguments *)argp;
 	Matrix *matrix = args->matrix;
-	
-	double lminnorm = -1, norm;
-	int lmini = args->s;
-	int lminj = lmini;
-	int l, j;
 	
 	double *tmp = new double[matrix->blocksize * matrix->blocksize];
 	double *rmatrix = new double[matrix->blocksize * matrix->blocksize];
 	
-	for (l = args->s + args->ti; l < matrix->size / matrix->blocksize; l += args->threads) {
-		for (j = args->s; j < matrix->size / matrix->blocksize; ++j)
-			// Process block (l, j)
-			if (block_get_reverse(matrix->blocksize,
-				matrix_get_pos_block(matrix, l, j),
-				rmatrix,
-				tmp)
-			) {
-				norm = block_get_norm(matrix->blocksize, rmatrix);
-				if (lminnorm < 0 || norm < lminnorm) {
-					lminnorm = norm;
-					lmini = l;
-					lminj = j;
+	double lminnorm = -1, norm;
+	int lmini;
+	int lminj;
+	int s, i, j;
+
+	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
+		// Part 1: selecting main block
+		// ----------------------------
+		lmini = s;
+		lminj = s;
+		
+		for (i = s + args->ti; i < matrix->size / matrix->blocksize; i += args->threads) {
+			for (j = s; j < matrix->size / matrix->blocksize; ++j)
+				// Process block (i, j)
+				if (block_get_reverse(matrix->blocksize,
+					matrix_get_pos_block(matrix, i, j),
+					rmatrix,
+					tmp)
+				) {
+					norm = block_get_norm(matrix->blocksize, rmatrix);
+					if (lminnorm < 0 || norm < lminnorm) {
+						lminnorm = norm;
+						lmini = i;
+						lminj = j;
+					}
 				}
-			}
 		}
-	
-	pthread_mutex_lock(&mutex);
-	if (!*(args->processedthreads) || lminnorm < *(args->minnorm)) {
-		*(args->minnorm) = lminnorm;
-		*(args->mini) = lmini;
-		*(args->minj) = lminj;
+		pthread_mutex_lock(&mutex);
+		if (!*(args->processedthreads) || lminnorm < *(args->minnorm)) {
+			*(args->minnorm) = lminnorm;
+			*(args->mini) = lmini;
+			*(args->minj) = lminj;
+		}
+		++(*(args->processedthreads));
+		if (*(args->processedthreads) == args->threads)
+			pthread_cond_signal(&condvar_tomf);
+
+		// Part 2: subtracting block strings
+		// ---------------------------------
+		pthread_cond_wait(&condvar_totf, &mutex);
+		pthread_mutex_unlock(&mutex);
+		for (i = s + args->ti + 1; i < matrix->numberOfBlockRows; i += args->threads) {
+			for (j = s+1; j < matrix->numberOfBlockColumns; ++j) {
+				block_left_multiply(
+					matrix_get_pos_height(matrix, i),
+					matrix_get_pos_width(matrix, s), /* blocksize */
+					matrix_get_pos_height(matrix, j),
+					matrix_get_pos_block(matrix, s, j),
+					matrix_get_pos_block(matrix, i, s),
+					tmp
+				);
+				block_subtract(
+					matrix_get_pos_size(matrix, i, j),
+					matrix_get_pos_block(matrix, i, j),
+					tmp
+				);
+			}
+			block_apply_to_vector(
+				matrix->blocksize,
+				matrix_get_pos_width(matrix, i),
+				matrix_get_pos_block(matrix, i, s),
+				&(args->rightcol[s * matrix->blocksize]),
+				tmp
+			);
+			block_subtract(matrix_get_pos_height(matrix, i),
+				&(args->rightcol[i * matrix->blocksize]),
+				tmp
+			);
+		}
+		pthread_mutex_lock(&mutex);
+		++(*(args->processedthreads));
+		if (*(args->processedthreads) == args->threads)
+			pthread_cond_signal(&condvar_tomf);
+		pthread_cond_wait(&condvar_totf, &mutex);
+		pthread_mutex_unlock(&mutex);
 	}
-	++(*(args->processedthreads));
-	pthread_mutex_unlock(&mutex);
 	delete[] tmp;
 	delete[] rmatrix;
-	return NULL;
-}
-
-void *tf2(void *argp) {
-	Arguments *args = (Arguments *)argp;
-	int i = args->i, j, s = args->s;
-	Matrix *matrix = args->matrix;
-	double *tmp = new double [matrix->blocksize * matrix->blocksize];
-	for (j = s + 1 + args->ti; j < matrix->numberOfBlockColumns; j += args->threads) {
-#ifdef DEBUG
-		pthread_mutex_lock(&mutex);
-		std::cout << "thread " << args->ti << ": s = " << s << ", i := " << i << ", j := " << j << std::endl;
-		pthread_mutex_unlock(&mutex);
-#endif
-		block_left_multiply(
-			matrix_get_pos_height(matrix, i),
-			matrix_get_pos_width(matrix, s),
-			matrix_get_pos_height(matrix, j),
-			matrix_get_pos_block(matrix, s, j),
-			matrix_get_pos_block(matrix, i, s),
-			tmp
-		);
-		block_subtract(
-			matrix_get_pos_size(matrix, i, j),
-			matrix_get_pos_block(matrix, i, j),
-			tmp
-		);
-	}
-	pthread_mutex_lock(&mutex);
-	++(*(args->processedthreads));
-	pthread_mutex_unlock(&mutex);
-	delete[] tmp;
 	return NULL;
 }
 
@@ -119,7 +135,7 @@ void print_matrix(Matrix *matrix, double *rightcol) {
 }
 
 void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *rightcol) {
-	int mini, minj, i, j, s, t, index, processedthreads, numberofthreads;
+	int mini, minj, i, j, s, t, index, processedthreads;
 	double *tempmatrix = new double[blocksize*blocksize];
 	double *buf = new double[blocksize*blocksize];
 	double *block;
@@ -128,6 +144,24 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 	pthread_t *thr = new pthread_t[threads];
 	Arguments *args = new Arguments[threads];
 	
+	for (t = 0; t < threads; ++t) {
+		args[t].matrix = matrix;
+		args[t].ti = t;
+		args[t].threads = threads;
+		args[t].rightcol = rightcol;
+		args[t].processedthreads = &processedthreads;
+		args[t].minnorm = &minnorm;
+		args[t].mini = &mini;
+		args[t].minj = &minj;
+		int res = pthread_create(
+			&(thr[t]), // Thread identifier
+			NULL,      // Thread attributes: using defaults
+			&tf,       // Thread start function
+			&(args[t]) // Parameter to be passed to thread function
+		);
+		if (res) std::cerr << "Cannot create thread!" << std::endl;
+	}
+	
 	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
 #ifdef DEBUG
 		std::cout << "s: " << s << std::endl;
@@ -135,32 +169,20 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 #endif
 		if (s + 1 != matrix->numberOfBlockColumns) {
 			processedthreads = 0;
-			numberofthreads = threads;
-			if (numberofthreads > size/blocksize - s)
-				numberofthreads = size/blocksize - s;
-			for (t = 0; t < numberofthreads; ++t) {
+			/*for (t = 0; t < threads; ++t) {
 				args[t].matrix = matrix;
 				args[t].ti = t;
 				args[t].s = s;
-				args[t].threads = numberofthreads;
+				args[t].threads = threads;
 				args[t].processedthreads = &processedthreads;
 				args[t].minnorm = &minnorm;
 				args[t].mini = &mini;
 				args[t].minj = &minj;
-				
-				int res = pthread_create(
-					&(thr[t]), // Thread identifier
-					NULL,      // Thread attributes: using defaults
-					&tf1,      // Thread start function
-					&(args[t]) // Parameter to be passed to thread function
-				);
-				if (res) std::cerr << "Cannot create thread!" << std::endl;
-			}
-			
-			for (t = 0; t < numberofthreads; ++t)
-				pthread_join(thr[t], NULL);
-			
-			assert (processedthreads == numberofthreads);
+			}*/
+			pthread_mutex_lock(&mutex);
+			pthread_cond_broadcast(&condvar_totf);
+			pthread_cond_wait(&condvar_tomf, &mutex);
+			pthread_mutex_unlock(&mutex);
 #ifdef DEBUG
 			std::cout << "minblock: (" << mini << ", " << minj << ")" << std::endl;
 #endif
@@ -193,47 +215,20 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 			for (j = 0; j < matrix_get_pos_width(matrix, s); ++j)
 				matrix_get_pos_block(matrix, s, s)
 				[i*matrix_get_pos_height(matrix, s)+j] = (i == j);
-#ifdef DEBUG
-		std::cout << "Before calling tf2:" << std::endl;
-		print_matrix(matrix, rightcol);
-#endif
-		numberofthreads = threads;
-		if (numberofthreads > matrix->numberOfBlockColumns - s)
-			numberofthreads = matrix->numberOfBlockColumns - s;
-		for (i = s+1; i < matrix->numberOfBlockColumns; ++i) {
-			processedthreads = 0;
-			for (t = 0; t < numberofthreads; ++t) {
-				args[t].matrix = matrix;
-				args[t].ti = t;
-				args[t].s = s;
-				args[t].threads = numberofthreads;
-				args[t].processedthreads = &processedthreads;
-				args[t].ti = t;
-				args[t].i = i;
-				args[t].rightcol = rightcol;
-				int res = pthread_create(
-					&(thr[t]), // Thread identifier
-					NULL,      // Thread attributes: using defaults
-					&tf2,      // Thread start function
-					&(args[t]) // Parameter to be passed to thread function
-				);
-				if (res) std::cerr << "Cannot create thread!" << std::endl;
-			}
-			for (t = 0; t < numberofthreads; ++t)
-				pthread_join(thr[t], NULL);
-			assert (processedthreads == numberofthreads);
-			block_apply_to_vector(
-				matrix->blocksize,
-				matrix_get_pos_width(matrix, i),
-				matrix_get_pos_block(matrix, i, s),
-				&(rightcol[s * matrix->blocksize]),
-				tempmatrix
-			);
-			block_subtract(matrix_get_pos_height(matrix, i),
-				&(rightcol[i * matrix->blocksize]),
-				tempmatrix
-			);
-		}
+		processedthreads = 0;
+		/*for (t = 0; t < threads; ++t) {
+			args[t].matrix = matrix;
+			args[t].ti = t;
+			args[t].s = s;
+			args[t].threads = numberofthreads;
+			args[t].processedthreads = &processedthreads;
+			args[t].ti = t;
+			args[t].rightcol = rightcol;
+		}*/
+		pthread_mutex_lock(&mutex);
+		pthread_cond_broadcast(&condvar_totf);
+		pthread_cond_wait(&condvar_tomf, &mutex);
+		pthread_mutex_unlock(&mutex);
 		for (i = s+1; i < matrix->numberOfBlockColumns; ++i) {
 			block = matrix_get_pos_block(matrix, i, s);
 			index = blocksize * matrix_get_pos_height(matrix, i);
