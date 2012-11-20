@@ -110,7 +110,8 @@ void *tf(void *argp) {
 		++(*(args->processedthreads));
 		if (*(args->processedthreads) == args->threads)
 			pthread_cond_signal(&condvar_tomf);
-		pthread_cond_wait(&condvar_totf, &mutex);
+		if (s + 1 != matrix->numberOfBlockColumns)
+			pthread_cond_wait(&condvar_totf, &mutex);
 		pthread_mutex_unlock(&mutex);
 	}
 	delete[] tmp;
@@ -135,7 +136,7 @@ void print_matrix(Matrix *matrix, double *rightcol) {
 }
 
 void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *rightcol) {
-	int mini, minj, i, j, s, t, index, processedthreads;
+	int mini, minj, i, j, s, t, index, processedthreads = 0;
 	double *tempmatrix = new double[blocksize*blocksize];
 	double *buf = new double[blocksize*blocksize];
 	double *block;
@@ -167,32 +168,20 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 		std::cout << "s: " << s << std::endl;
 		print_matrix(matrix, rightcol);
 #endif
-		if (s + 1 != matrix->numberOfBlockColumns) {
-			processedthreads = 0;
-			/*for (t = 0; t < threads; ++t) {
-				args[t].matrix = matrix;
-				args[t].ti = t;
-				args[t].s = s;
-				args[t].threads = threads;
-				args[t].processedthreads = &processedthreads;
-				args[t].minnorm = &minnorm;
-				args[t].mini = &mini;
-				args[t].minj = &minj;
-			}*/
-			pthread_mutex_lock(&mutex);
-			pthread_cond_broadcast(&condvar_totf);
-			pthread_cond_wait(&condvar_tomf, &mutex);
-			pthread_mutex_unlock(&mutex);
+		processedthreads = 0;
+		pthread_mutex_lock(&mutex);
+		pthread_cond_broadcast(&condvar_totf);
+		pthread_cond_wait(&condvar_tomf, &mutex);
+		pthread_mutex_unlock(&mutex);
 #ifdef DEBUG
-			std::cout << "minblock: (" << mini << ", " << minj << ")" << std::endl;
+		std::cout << "minblock: (" << mini << ", " << minj << ")" << std::endl;
 #endif
-			matrix_swap_block_columns(matrix, minj, s);
-			matrix_swap_block_rows   (matrix, mini, s);
-			if (s != mini)
-				for (j = 0; j < blocksize; ++j)
-					std::swap(rightcol[blocksize*s+j],
-						rightcol[blocksize*mini+j]);
-		}
+		matrix_swap_block_columns(matrix, minj, s);
+		matrix_swap_block_rows   (matrix, mini, s);
+		if (s != mini)
+			for (j = 0; j < blocksize; ++j)
+				std::swap(rightcol[blocksize*s+j],
+					rightcol[blocksize*mini+j]);
 		block_get_reverse(matrix_get_pos_height(matrix, s),
 			matrix_get_pos_block(matrix, s, s),
 			tempmatrix,
@@ -216,18 +205,10 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 				matrix_get_pos_block(matrix, s, s)
 				[i*matrix_get_pos_height(matrix, s)+j] = (i == j);
 		processedthreads = 0;
-		/*for (t = 0; t < threads; ++t) {
-			args[t].matrix = matrix;
-			args[t].ti = t;
-			args[t].s = s;
-			args[t].threads = numberofthreads;
-			args[t].processedthreads = &processedthreads;
-			args[t].ti = t;
-			args[t].rightcol = rightcol;
-		}*/
 		pthread_mutex_lock(&mutex);
 		pthread_cond_broadcast(&condvar_totf);
-		pthread_cond_wait(&condvar_tomf, &mutex);
+		if (s + 1 != matrix->numberOfBlockColumns)
+			pthread_cond_wait(&condvar_tomf, &mutex);
 		pthread_mutex_unlock(&mutex);
 		for (i = s+1; i < matrix->numberOfBlockColumns; ++i) {
 			block = matrix_get_pos_block(matrix, i, s);
@@ -239,6 +220,8 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 	for (i = size-1; i >= 0; --i)
 		for (j = i+1; j < size; ++j)
 			rightcol[i] -= matrix_get_element(matrix, i, j)*rightcol[j];
+	for (i = 0; i < threads; ++i)
+		pthread_join(thr[i], NULL);
 	pthread_mutex_destroy(&mutex);
 	delete[] tempmatrix;
 	delete[] buf;
