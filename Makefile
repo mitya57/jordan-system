@@ -13,6 +13,9 @@ profile-generate:
 profile-use:
 	$(CXX) $(CXXFLAGS) -O3 -fprofile-use -o matrix matrix.cc
 
+clean:
+	rm matrix matrix_tests *.o* *.gc*
+
 pg: profile-generate
 pu: profile-use
 main: debug
