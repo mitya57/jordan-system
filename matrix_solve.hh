@@ -81,8 +81,8 @@ void *tf(void *argp) {
 		if (*(args->processedthreads) == args->threads)
 			pthread_cond_signal(&condvar_tomf);
 
-		// Part 2: subtracting block strings
-		// ---------------------------------
+		// Part 2: subtracting block rows
+		// ------------------------------
 		pthread_cond_wait(&condvar_totf, &mutex);
 		pthread_mutex_unlock(&mutex);
 		for (i = s + args->ti + 1; i < matrix->numberOfBlockRows; i += args->threads) {
