@@ -62,7 +62,6 @@ int main(int argc, char **argv) {
 	double *rightcol = new double[size];
 	double *realrightcol = new double[size];
 	double *origrightcol = new double[size];
-	double *testrightcol = new double[size];
 	if (argc < 5) {
 		for (i = 0; i < size; ++i)
 			for (j = 0; j < size; ++j)
@@ -108,9 +107,9 @@ int main(int argc, char **argv) {
 	if (argc < 5)
 		std::cout << "Norm of diff vector is "
 		<< get_diff_norm(matrix, realrightcol) << std::endl;
-	matrix_apply_to_vector(origmatrix, realrightcol, testrightcol);
+	matrix_apply_to_vector(origmatrix, realrightcol, rightcol);
 	std::cout << "Residual is " <<
-	get_residual(size, origrightcol, testrightcol) << std::endl;
+	get_residual(size, origrightcol, rightcol) << std::endl;
 	std::cout << "=============== TIME: "
 	<< resource_usage.ru_utime.tv_sec << " seconds, "
 	<< resource_usage.ru_utime.tv_usec / 1000
@@ -118,7 +117,6 @@ int main(int argc, char **argv) {
 	delete[] rightcol;
 	delete[] realrightcol;
 	delete[] origrightcol;
-	delete[] testrightcol;
 	matrix_free(matrix);
 	matrix_free(origmatrix);
 	delete matrix;
