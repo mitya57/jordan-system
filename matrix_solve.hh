@@ -42,6 +42,13 @@ void *tf(void *argp) {
 	int lminj;
 	int s, i, j;
 
+	pthread_mutex_lock(&mutex);
+	++(*(args->processedthreads));
+	if (*(args->processedthreads) == args->threads)
+		pthread_cond_signal(&condvar_tomf);
+	pthread_cond_wait(&condvar_totf, &mutex);
+	pthread_mutex_unlock(&mutex);
+
 	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
 		// Part 1: selecting main block
 		// ----------------------------
@@ -65,7 +72,7 @@ void *tf(void *argp) {
 				}
 		}
 		pthread_mutex_lock(&mutex);
-		if (!*(args->processedthreads) || lminnorm < *(args->minnorm)) {
+		if (lminnorm >= 0 && (*(args->minnorm) < 0 || lminnorm < *(args->minnorm))) {
 			*(args->minnorm) = lminnorm;
 			*(args->mini) = lmini;
 			*(args->minj) = lminj;
@@ -145,6 +152,7 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 	pthread_t *thr = new pthread_t[threads];
 	Arguments *args = new Arguments[threads];
 	
+	pthread_mutex_lock(&mutex);
 	for (t = 0; t < threads; ++t) {
 		args[t].matrix = matrix;
 		args[t].ti = t;
@@ -163,9 +171,14 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 		if (res) std::cerr << "Cannot create thread!" << std::endl;
 	}
 	
+	// let the threads initialize
+	pthread_cond_wait(&condvar_tomf, &mutex);
+	pthread_mutex_unlock(&mutex);
+	
 	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
 		processedthreads = 0;
 		pthread_mutex_lock(&mutex);
+		minnorm = -1;
 		pthread_cond_broadcast(&condvar_totf);
 		pthread_cond_wait(&condvar_tomf, &mutex);
 		pthread_mutex_unlock(&mutex);
