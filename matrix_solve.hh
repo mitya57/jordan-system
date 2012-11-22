@@ -226,9 +226,21 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 				block[j] = 0;
 		}
 	}
-	for (i = size-1; i >= 0; --i)
-		for (j = i+1; j < size; ++j)
-			rightcol[i] -= matrix_get_element(matrix, i, j)*rightcol[j];
+	for (i = matrix->numberOfBlockRows; i >= 0; --i)
+		for (j = i+1; j < matrix->numberOfBlockColumns; ++j) {
+			block_apply_to_vector(
+				matrix_get_pos_height(matrix, j),
+				matrix_get_pos_height(matrix, i),
+				matrix_get_pos_block(matrix, i, j),
+				&(rightcol[j*blocksize]),
+				tempmatrix
+			);
+			block_subtract(
+				matrix_get_pos_height(matrix, i),
+				&(rightcol[i*blocksize]),
+				tempmatrix
+			);
+		}
 	for (i = 0; i < threads; ++i)
 		pthread_join(thr[i], NULL);
 	pthread_mutex_destroy(&mutex);
