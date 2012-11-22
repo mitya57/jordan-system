@@ -37,7 +37,7 @@ void *tf(void *argp) {
 	double *tmp = new double[matrix->blocksize * matrix->blocksize];
 	double *rmatrix = new double[matrix->blocksize * matrix->blocksize];
 	
-	double lminnorm = -1, norm;
+	double lminnorm, norm;
 	int lmini;
 	int lminj;
 	int s, i, j;
@@ -52,8 +52,7 @@ void *tf(void *argp) {
 	for (s = 0; s < matrix->numberOfBlockColumns; ++s) {
 		// Part 1: selecting main block
 		// ----------------------------
-		lmini = s;
-		lminj = s;
+		lminnorm = -1;
 		
 		for (i = s + args->ti; i < matrix->size / matrix->blocksize; i += args->threads) {
 			for (j = s; j < matrix->size / matrix->blocksize; ++j)
@@ -179,18 +178,22 @@ void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *
 		processedthreads = 0;
 		pthread_mutex_lock(&mutex);
 		minnorm = -1;
+		mini = s;
+		minj = s;
 		pthread_cond_broadcast(&condvar_totf);
 		pthread_cond_wait(&condvar_tomf, &mutex);
 		pthread_mutex_unlock(&mutex);
 #ifdef DEBUG
 		std::cout << "minblock: (" << mini << ", " << minj << ")" << std::endl;
 #endif
-		matrix_swap_block_columns(matrix, minj, s);
-		matrix_swap_block_rows   (matrix, mini, s);
-		if (s != mini)
+		if (s != minj)
+			matrix_swap_block_columns(matrix, minj, s);
+		if (s != mini) {
+			matrix_swap_block_rows(matrix, mini, s);
 			for (j = 0; j < blocksize; ++j)
 				std::swap(rightcol[blocksize*s+j],
 					rightcol[blocksize*mini+j]);
+		}
 		block_get_reverse(matrix_get_pos_height(matrix, s),
 			matrix_get_pos_block(matrix, s, s),
 			tempmatrix,
