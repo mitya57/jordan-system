@@ -82,11 +82,26 @@ void block_left_multiply(int n, int m, int k, double *block1, double *block2, do
 	 * block1 : m rows, k cols
 	 * result : n rows, k cols */
 	int i, j, l;
-	for (i = 0; i < n; ++i)
-		for (j = 0; j < k; ++j) {
+	for (i = 0; i < n; i += 2)
+		for (j = 0; j < k; j += 2) {
 			result[i*k+j] = 0;
 			for (l = 0; l < m; ++l)
 				result[i*k+j] += block2[i*m+l]*block1[l*k+j];
+			if (i+1 < n) {
+				result[i*k+k+j] = 0;
+				for (l = 0; l < m; ++l)
+					result[i*k+k+j] += block2[i*m+m+l]*block1[l*k+j];
+			}
+			if (j+1 < k) {
+				result[i*k+j+1] = 0;
+				for (l = 0; l < m; ++l)
+					result[i*k+j+1] += block2[i*m+l]*block1[l*k+j+1];
+			}
+			if (i+1 < n && j+1 < k) {
+				result[i*k+k+j+1] = 0;
+				for (l = 0; l < m; ++l)
+					result[i*k+k+j+1] += block2[i*m+m+l]*block1[l*k+j+1];
+			}
 		}
 }
 
@@ -94,14 +109,8 @@ void block_left_multiply_alt(int n, int m, double *block1, double *block2, doubl
 	/* block1 = block2 * block1
 	 * block2 : n rows, n cols
 	 * block1 : n rows, m cols */
-	int i, j, k;
 	block_clone(n*m, block1, tempmatrix);
-	for (i = 0; i < n; ++i)
-		for (j = 0; j < m; ++j) {
-			tempmatrix[i*m+j] = 0;
-			for (k = 0; k < n; ++k)
-				tempmatrix[i*m+j] += block2[i*n+k]*block1[k*m+j];
-		}
+	block_left_multiply(n, n, m, block1, block2, tempmatrix);
 	block_clone(n*m, tempmatrix, block1);
 }
 
