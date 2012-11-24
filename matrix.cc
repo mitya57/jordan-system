@@ -14,12 +14,18 @@
 #include <cmath>
 #include <algorithm>
 #include <pthread.h>
-#include <sys/resource.h>
+#include <sys/time.h>
 
 #include "block.hh"
 #include "matrix.hh"
 #include "matrix_solve.hh"
 #include "function.hh"
+
+long int get_time() {
+	timeval buf;
+	gettimeofday(&buf, 0);
+	return buf.tv_sec*1000 + buf.tv_usec/1000;
+}
 
 void print_result(Matrix *matrix, double *rightcol, int limit) {
 	for (int i = 0; i < (matrix->size > limit ? limit : matrix->size); ++i)
@@ -47,7 +53,7 @@ double get_residual(int size, double *oldc, double *newc) {
 int main(int argc, char **argv) {
 	Matrix *matrix = new Matrix, *origmatrix = new Matrix;
 	int size, blocksize, threads, i, j;
-	
+	long int to = get_time(), tn;
 	if (argc >= 4) {
 		size = atoi(argv[1]);
 		blocksize = atoi(argv[2]);
@@ -95,9 +101,9 @@ int main(int argc, char **argv) {
 		for (j = 0; j < size; ++j)
 			matrix_set_element(origmatrix, i, j, matrix_get_element(matrix, i, j));
 	print_matrix(matrix, rightcol);
-	matrix_solve(size, blocksize, threads, matrix, rightcol);
-	rusage resource_usage;
-	getrusage(RUSAGE_SELF, &resource_usage);
+	matrix_solve(blocksize, threads, matrix, rightcol);
+	tn = get_time();
+	tn -= to;
 	for (i = 0; i < size; ++i) {
 		j = 0;
 		while (matrix->blockcolumnind[j] != i/matrix->blocksize) ++j;
@@ -111,8 +117,7 @@ int main(int argc, char **argv) {
 	std::cout << "Residual is " <<
 	get_residual(size, origrightcol, rightcol) << std::endl;
 	std::cout << "=============== TIME: "
-	<< resource_usage.ru_utime.tv_sec << " seconds, "
-	<< resource_usage.ru_utime.tv_usec / 1000
+	<< tn / 1000 << " seconds, " << tn % 1000
 	<< " milliseconds ===============" << std::endl;
 	delete[] rightcol;
 	delete[] realrightcol;
