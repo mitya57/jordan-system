@@ -17,8 +17,6 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t condvar_tomf = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t condvar_totf = PTHREAD_COND_INITIALIZER;
 
-static bool threads = false;
-
 struct Arguments {
 	Matrix *matrix;
 	int ti;
@@ -38,8 +36,8 @@ void *tf(void *argp) {
 	double *rmatrix = new double[matrix->blocksize * matrix->blocksize];
 	
 	double lminnorm, norm;
-	int lmini;
-	int lminj;
+	int lmini = -1;
+	int lminj = -1;
 	int s, i, j;
 
 	pthread_mutex_lock(&mutex);
@@ -141,7 +139,7 @@ void print_matrix(Matrix *matrix, double *rightcol) {
 	std::cout << "-----------------------------" << std::endl;
 }
 
-void matrix_solve(int size, int blocksize, int threads, Matrix *matrix, double *rightcol) {
+void matrix_solve(int blocksize, int threads, Matrix *matrix, double *rightcol) {
 	int mini, minj, i, j, s, t, index, processedthreads = 0;
 	double *tempmatrix = new double[blocksize*blocksize];
 	double *buf = new double[blocksize*blocksize];
