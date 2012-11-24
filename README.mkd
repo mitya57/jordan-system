@@ -22,17 +22,18 @@ will automatically generate the matrix using a formula given in `function.hh` fi
 
 ### Compiling
 
-To reach the maximum performance, we recommend using the [Profile-guided optimization][1].
+To reach the maximum performance, we recommend using the [profile-guided optimization][1].
 First you need to generate the profile. To do that, run:
 
-    g++ -O3 -fprofile-generate matrix.cc -o matrix
+    g++ -O3 -lpthread -fprofile-generate matrix.cc -o matrix
 
 Then run the `matrix` executable as described below and wait for the profile to be generated.
 After that is done, run:
 
-    g++ -O3 -fprofile-use matrix.cc -o matrix
+    g++ -O3 -lpthread -fprofile-use matrix.cc -o matrix
 
-Now your program will be optimized based on its profile.
+Now your program will be optimized based on its profile. You can also use `make` targets
+(`make pg` and `make pu`, respectively).
 
 [1]: https://en.wikipedia.org/wiki/Profile-guided_optimization
 
