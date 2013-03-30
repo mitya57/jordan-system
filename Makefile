@@ -1,21 +1,17 @@
-CXX := g++
-CXXFLAGS := -lpthread
+MPICXX := mpic++
+CXXFLAGS := -Wall -o mpi-main
 
-debug:
-	$(CXX) $(CXXFLAGS) -g -DDEBUG -o matrix matrix.cc
+mpirelease: mpi-main.cc mpi-util.hh matrix.hh block.hh
+	$(MPICXX) $(CXXFLAGS) -O3 mpi-main.cc && \
+	touch mpirelease
 
-release:
-	$(CXX) $(CXXFLAGS) -O3 -o matrix matrix.cc
+mpidebug: mpi-main.cc mpi-util.hh matrix.hh block.hh
+	$(MPICXX) $(CXXFLAGS) -g -DDEBUG mpi-main.cc && \
+	touch mpidebug
 
-profile-generate:
-	$(CXX) $(CXXFLAGS) -O3 -fprofile-generate -o matrix matrix.cc
-
-profile-use:
-	$(CXX) $(CXXFLAGS) -O3 -fprofile-use -o matrix matrix.cc
+mpidebug-alt: mpi-main.cc mpi-util.hh matrix.hh block.hh
+	$(MPICXX) $(CXXFLAGS) -g mpi-main.cc && \
+	touch mpidebug-alt
 
 clean:
-	rm matrix matrix_tests *.o* *.gc*
-
-pg: profile-generate
-pu: profile-use
-main: debug
+	rm -f *.o* *.gc* mpi-main mpidebug* mpirelease
