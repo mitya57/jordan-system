@@ -334,11 +334,11 @@ void mpi_process_main_block_row_and_subtract_rows(MPI_Data *data, int s) {
 			data->tempbuf,
 			data->blockbuf
 		);
-		for (x = s+1; x < M_INFO->numberOfBlockColumns; ++x)
+		for (y = s+1; y < M_INFO->numberOfBlockColumns; ++y)
 			block_left_multiply_alt(
 				BLOCKSIZE,
-				mpi_get_pos_width(data, x),
-				mpi_get_pos_block(data, s, x),
+				mpi_get_pos_width(data, y),
+				mpi_get_pos_block(data, s, y),
 				data->tempbuf,
 				data->blockbuf
 			);
