@@ -287,20 +287,16 @@ void mpi_read_matrix(MPI_Data *data, char *filename) {
 
 void mpi_find_and_move_main_block(MPI_Data *data, int s) {
 	MPI_Double_Int sendbuf, recvbuf;
-	int localx, localy, matrixx, matrixy;
+	int matrixx, matrixy;
 	double norm;
 	sendbuf.value = -1;
 	sendbuf.pos = -1;
 	// find the main block
-	for (localx = 0; (localx+1)*BLOCKSIZE <= ROW_HEIGHT_FOR_P(data->rank); ++localx)
-		for (localy = 0; (localy+1)*BLOCKSIZE <= SIZE; ++localy) {
+	for (matrixx = s; (matrixx+1)*BLOCKSIZE <= ROW_HEIGHT_FOR_P(data->rank); ++matrixx)
+		for (matrixy = s; (matrixy+1)*BLOCKSIZE <= SIZE; ++matrixy) {
 			// calculate norm
-			matrixx = mpi_localx_to_matrixx(data, localx);
-			matrixy = mpi_localy_to_matrixy(data, localy);
-			if (matrixx < s || matrixy < s)
-				continue;
 			if (!block_get_reverse(BLOCKSIZE,
-			mpi_get_local_block(data, localx, localy),
+			mpi_get_pos_block(data, matrixx, matrixy),
 			data->blockbuf, data->tempbuf))
 				continue;
 			norm = block_get_norm(BLOCKSIZE, data->blockbuf);
