@@ -199,7 +199,7 @@ void mpi_print_matrix(MPI_Data *data) {
 				}
 				vblock = M_INFO->blockrowind[i];
 				locali = (vblock % data->bpp) * BLOCKSIZE + (i % BLOCKSIZE);
-				el = PRINT_FORMAT(data->rightcol[locali % ROW_HEIGHT]);
+				el = data->rightcol[locali % ROW_HEIGHT];
 				MPI_Send(&el, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
 			}
 		} else if (!(data->rank)) {
@@ -212,7 +212,7 @@ void mpi_print_matrix(MPI_Data *data) {
 				std::cout << "...";
 			vblock = M_INFO->blockrowind[i];
 			locali = (vblock % data->bpp) * BLOCKSIZE + (i % BLOCKSIZE);
-			el = PRINT_FORMAT(data->rightcol[locali % ROW_HEIGHT]);
+			el = data->rightcol[locali % ROW_HEIGHT];
 			std::cout << "\t" << el << std::endl;
 		}
 	}
