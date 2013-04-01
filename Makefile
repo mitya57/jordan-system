@@ -6,12 +6,8 @@ mpirelease: mpi-main.cc mpi-util.hh matrix.hh block.hh
 	touch mpirelease
 
 mpidebug: mpi-main.cc mpi-util.hh matrix.hh block.hh
-	$(MPICXX) $(CXXFLAGS) -g -DDEBUG mpi-main.cc && \
-	touch mpidebug
-
-mpidebug-alt: mpi-main.cc mpi-util.hh matrix.hh block.hh
 	$(MPICXX) $(CXXFLAGS) -g mpi-main.cc && \
-	touch mpidebug-alt
+	touch mpidebug
 
 clean:
 	rm -f *.o* *.gc* mpi-main mpidebug* mpirelease

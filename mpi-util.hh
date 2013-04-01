@@ -17,9 +17,6 @@
 #define SIZE (M_INFO->size)
 #define PRINT_SIZE ((SIZE < 10) ? SIZE : 10)
 #define PRINT_FORMAT(x) ((0 < x && x < 10) ? (double(int(x*1e4))/1e4) : (double(int(x*1e3))/1e3))
-#ifdef DEBUG
-#define MESSAGE std::cout << "\x1b[3" << data->rank + 3 << "mProcess " << data->rank << "\x1b[39m: "
-#endif
 
 #define mpi_get_pos_width mpi_get_pos_height
 
