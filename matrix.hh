@@ -4,8 +4,6 @@
  * This file contains the matrix-related functions. *
  ***************************************************/
 
-// TODO: reduce size of numberOfBlock* arrays (?)
-
 #define numberOfBlockColumns numberOfBlockRows
 
 struct MatrixInfo {
