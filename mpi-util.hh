@@ -19,6 +19,7 @@
 #define PRINT_FORMAT(x) ((0 < x && x < 10) ? (double(int(x*1e4))/1e4) : (double(int(x*1e3))/1e3))
 
 #define mpi_get_pos_width mpi_get_pos_height
+#define mpi_rank_for_i(data, i) mpi_rank_for_x(data, i / BLOCKSIZE)
 
 /****************** NOTE *******************
  *  blocks  are denoted by x and y letters *
@@ -97,8 +98,8 @@ int mpi_get_pos_size(MPI_Data *data, int x, int y) {
 double *mpi_get_pos_block(MPI_Data *data, int x, int y, bool _smode = false) {
 	// x and y are *global* here!
 	// use mpi_localx_to_matrixx and mpi_localy_to_matrixy to convert.
-	int localx = M_INFO->blockrowind[x * BLOCKSIZE] % data->bpp;
-	int localy = (_smode ? 0 : M_INFO->blockcolumnind[y * BLOCKSIZE]);
+	int localx = M_INFO->blockRowInd[x] % data->bpp;
+	int localy = (_smode ? 0 : M_INFO->blockColumnInd[y]);
 	int start = BLOCKSIZE * SIZE * localx;
 	start += mpi_get_pos_height(data, x) * BLOCKSIZE * localy;
 	return &((data->matrix)[start]);
@@ -107,7 +108,7 @@ double *mpi_get_pos_block(MPI_Data *data, int x, int y, bool _smode = false) {
 double *mpi_get_pos_rightcol_block(MPI_Data *data, int x) {
 	// x is *global* here!
 	// use mpi_localx_to_matrixx to convert.
-	int localx = M_INFO->blockrowind[x * BLOCKSIZE] % data->bpp;
+	int localx = M_INFO->blockRowInd[x] % data->bpp;
 	return &((data->rightcol)[localx * BLOCKSIZE]);
 }
 
@@ -134,17 +135,17 @@ int mpi_get_local_width(MPI_Data *data, int localy) {
 
 int mpi_localx_to_matrixx(MPI_Data *data, int localx) {
 	int pos = localx + data->rank * data->bpp;
-	int i = 0;
-	while (M_INFO->blockrowind[i] != pos)
-		++i;
-	return i / BLOCKSIZE;
+	int x = 0;
+	while (M_INFO->blockRowInd[x] != pos)
+		++x;
+	return x;
 }
 
 int mpi_localy_to_matrixy(MPI_Data *data, int localy) {
-	int j = 0;
-	while (M_INFO->blockcolumnind[j] != localy)
-		++j;
-	return j / BLOCKSIZE;
+	int y = 0;
+	while (M_INFO->blockColumnInd[y] != localy)
+		++y;
+	return y;
 }
 
 double *mpi_local_element(MPI_Data *data, int locali, int localj,
@@ -156,16 +157,15 @@ double *matrix = 0, int p = -1) {
 }
 
 double *mpi_global_element(MPI_Data *data, int i, int j) {
-	int localy = M_INFO->blockcolumnind[j];
+	int localy = M_INFO->blockColumnInd[j / BLOCKSIZE];
 	int localj = localy * BLOCKSIZE + (j % BLOCKSIZE);
-	int localx = M_INFO->blockrowind[i] % data->bpp;
+	int localx = M_INFO->blockRowInd[i / BLOCKSIZE] % data->bpp;
 	int locali = localx * BLOCKSIZE + (i % BLOCKSIZE);
 	return mpi_local_element(data, locali, localj);
 }
 
-int mpi_rank_for_i(MPI_Data *data, int i) {
-	int x = M_INFO->blockrowind[i];
-	return x / data->bpp;
+int mpi_rank_for_x(MPI_Data *data, int x) {
+	return M_INFO->blockRowInd[x] / data->bpp;
 }
 
 void mpi_print_matrix(MPI_Data *data) {
@@ -194,7 +194,7 @@ void mpi_print_matrix(MPI_Data *data) {
 					el = PRINT_FORMAT(*mpi_global_element(data, i, j));
 					MPI_Send(&el, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
 				}
-				vblock = M_INFO->blockrowind[i];
+				vblock = M_INFO->blockRowInd[i / BLOCKSIZE];
 				locali = (vblock % data->bpp) * BLOCKSIZE + (i % BLOCKSIZE);
 				el = data->rightcol[locali % ROW_HEIGHT];
 				MPI_Send(&el, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
@@ -207,7 +207,7 @@ void mpi_print_matrix(MPI_Data *data) {
 			}
 			if (SIZE > 10)
 				std::cout << "...";
-			vblock = M_INFO->blockrowind[i];
+			vblock = M_INFO->blockRowInd[i / BLOCKSIZE];
 			locali = (vblock % data->bpp) * BLOCKSIZE + (i % BLOCKSIZE);
 			el = data->rightcol[locali % ROW_HEIGHT];
 			std::cout << "\t" << el << std::endl;
@@ -313,12 +313,14 @@ void mpi_find_and_move_main_block(MPI_Data *data, int s) {
 		matrix_swap_block_columns(M_INFO, s, minj);
 	}
 	// let others know about the change
-	MPI_Bcast(M_INFO->blockcolumnind, SIZE, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(M_INFO->blockrowind, SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(M_INFO->blockColumnInd, M_INFO->numberOfBlockColumns,
+		MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(M_INFO->blockRowInd, M_INFO->numberOfBlockRows,
+		MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 void mpi_process_main_block_row_and_subtract_rows(MPI_Data *data, int s) {
-	int p = mpi_rank_for_i(data, s * BLOCKSIZE);
+	int p = mpi_rank_for_x(data, s);
 	int x, y, localy;
 	double *sspointer, *bpointer, *spointer;
 	// process main block row
@@ -360,10 +362,10 @@ void mpi_process_main_block_row_and_subtract_rows(MPI_Data *data, int s) {
 	MPI_Bcast(bpointer, BLOCKSIZE, MPI_DOUBLE, p, MPI_COMM_WORLD);
 	// subtract block rows
 	for (x = s + 1; x < M_INFO->numberOfBlockRows; ++x) {
-		p = mpi_rank_for_i(data, x * BLOCKSIZE);
+		p = mpi_rank_for_x(data, x);
 		if (data->rank == p) {
 			for (y = s+1; y < M_INFO->numberOfBlockColumns; ++y) {
-				localy = M_INFO->blockcolumnind[y * BLOCKSIZE];
+				localy = M_INFO->blockColumnInd[y];
 				block_left_multiply(
 					mpi_get_pos_height(data, x),
 					mpi_get_pos_width(data, s),
@@ -398,7 +400,7 @@ void mpi_process_main_block_row_and_subtract_rows(MPI_Data *data, int s) {
 
 void mpi_reverse_subtract(MPI_Data *data, int s) {
 	// broadcast the block row to subtract
-	int p = mpi_rank_for_i(data, s * BLOCKSIZE);
+	int p = mpi_rank_for_x(data, s);
 	double *bpointer;
 	if (data->rank == p)
 		bpointer = mpi_get_pos_rightcol_block(data, s);
@@ -407,7 +409,7 @@ void mpi_reverse_subtract(MPI_Data *data, int s) {
 	MPI_Bcast(bpointer, BLOCKSIZE, MPI_DOUBLE, p, MPI_COMM_WORLD);
 	// now subtract
 	for (int x = s - 1; x >= 0; --x) {
-		p = mpi_rank_for_i(data, x * BLOCKSIZE);
+		p = mpi_rank_for_x(data, x);
 		if (data->rank == p) {
 			block_apply_to_vector(
 				mpi_get_pos_height(data, s),
@@ -457,9 +459,9 @@ void mpi_get_rightcol(MPI_Data *data, double *realrightcol) {
 	MPI_Status status;
 	for (i = 0; i < SIZE; ++i) {
 		j = 0;
-		while (M_INFO->blockcolumnind[j] != i/BLOCKSIZE) ++j;
+		while (M_INFO->blockColumnInd[j / BLOCKSIZE] != i/BLOCKSIZE) ++j;
 		k = mpi_rank_for_i(data, j);
-		j = M_INFO->blockrowind[j] * BLOCKSIZE;
+		j = M_INFO->blockRowInd[j / BLOCKSIZE] * BLOCKSIZE;
 		if (!k)
 			realrightcol[i] = data->rightcol[j + i % BLOCKSIZE];
 		else if (data->rank == k)
