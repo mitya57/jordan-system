@@ -291,6 +291,8 @@ void mpi_find_and_move_main_block(MPI_Data *data, int s) {
 	// find the main block
 	for (matrixx = s; (matrixx+1)*BLOCKSIZE <= ROW_HEIGHT_FOR_P(data->rank); ++matrixx)
 		for (matrixy = s; (matrixy+1)*BLOCKSIZE <= SIZE; ++matrixy) {
+			if (data->rank != mpi_rank_for_x(data, matrixx))
+				continue;
 			// calculate norm
 			if (!block_get_reverse(BLOCKSIZE,
 			mpi_get_pos_block(data, matrixx, matrixy),
