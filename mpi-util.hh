@@ -305,20 +305,15 @@ void mpi_find_and_move_main_block(MPI_Data *data, int s) {
 				sendbuf.pos = matrixx * M_INFO->numberOfBlockColumns + matrixy;
 			}
 		}
-	MPI_Reduce(&sendbuf, &recvbuf, 1, MPI_DOUBLE_INT,
-		MPI_MINLOC, 0, MPI_COMM_WORLD);
+	MPI_Allreduce(&sendbuf, &recvbuf, 1, MPI_DOUBLE_INT,
+		MPI_MINLOC, MPI_COMM_WORLD);
 	// move it, move it
-	if (!(data->rank) && recvbuf.value > 0) {
+	if (recvbuf.value > 0) {
 		int mini = recvbuf.pos / M_INFO->numberOfBlockColumns;
 		int minj = recvbuf.pos % M_INFO->numberOfBlockColumns;
 		matrix_swap_block_rows(M_INFO, s, mini);
 		matrix_swap_block_columns(M_INFO, s, minj);
 	}
-	// let others know about the change
-	MPI_Bcast(M_INFO->blockColumnInd, M_INFO->numberOfBlockColumns,
-		MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(M_INFO->blockRowInd, M_INFO->numberOfBlockRows,
-		MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 void mpi_process_main_block_row_and_subtract_rows(MPI_Data *data, int s) {
