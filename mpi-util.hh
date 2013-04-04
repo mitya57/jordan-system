@@ -457,13 +457,13 @@ void mpi_get_residual(MPI_Data *data, double *vector, double *residual) {
 }
 
 void mpi_get_rightcol(MPI_Data *data, double *realrightcol) {
-	int i, j, k;
+	int i, j, k, y;
 	MPI_Status status;
 	for (i = 0; i < SIZE; ++i) {
-		j = 0;
-		while (M_INFO->blockColumnInd[j / BLOCKSIZE] != i/BLOCKSIZE) ++j;
-		k = mpi_rank_for_i(data, j);
-		j = M_INFO->blockRowInd[j / BLOCKSIZE] * BLOCKSIZE;
+		y = 0;
+		while (M_INFO->blockColumnInd[y] != i/BLOCKSIZE) ++y;
+		k = mpi_rank_for_x(data, y);
+		j = M_INFO->blockRowInd[y] * BLOCKSIZE;
 		if (!k)
 			realrightcol[i] = data->rightcol[j + i % BLOCKSIZE];
 		else if (data->rank == k)
