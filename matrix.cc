@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 			for (j = 0; j < size; j += 2)
 				rightcol[i] += matrix_get_element(matrix, i, j);
 		}
-	} else { 
+	} else {
 		std::fstream matrixfile;
 		if (argc >= 4)
 			matrixfile.open(argv[4]);
@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
 			matrixfile.open("matrix.txt");
 
 		double buffer;
-		matrixfile >> size;
+		//matrixfile >> size;
 		for (i = 0; i < size; ++i) {
 			for (j = 0; j < size; ++j) {
 				matrixfile >> buffer;
