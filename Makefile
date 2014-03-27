@@ -2,7 +2,7 @@ CXX := c++
 CXXFLAGS := -lpthread
 
 debug:
-	$(CXX) $(CXXFLAGS) -g -DDEBUG -o matrix matrix.cc
+	$(CXX) $(CXXFLAGS) -g -o matrix matrix.cc
 
 release:
 	$(CXX) $(CXXFLAGS) -O3 -o matrix matrix.cc

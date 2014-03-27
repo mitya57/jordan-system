@@ -181,9 +181,6 @@ void matrix_solve(int blocksize, int threads, Matrix *matrix, double *rightcol) 
 		pthread_cond_broadcast(&condvar_totf);
 		pthread_cond_wait(&condvar_tomf, &mutex);
 		pthread_mutex_unlock(&mutex);
-#ifdef DEBUG
-		std::cout << "minblock: (" << mini << ", " << minj << ")" << std::endl;
-#endif
 		if (s != minj)
 			matrix_swap_block_columns(matrix, minj, s);
 		if (s != mini) {
